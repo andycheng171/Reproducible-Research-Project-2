@@ -1,0 +1,223 @@
+---
+title: 'Reproducible Research : Project 2'
+author: "Siyuan Cheng"
+date: "June 11, 2017"
+output:
+  pdf_document: default
+---
+
+
+## 1 Synopsis
+--------
+Across the United States, tornadoes, excessive heat, and flash floods are most 
+harmful with respect to population health. Across the United States, tornadoes, thunderstorm winds, and flash floods have the greatest economic consequences. This project analyzed the U.S. National Oceanic and Atmospheric Administration’s (NOAA) storm database to determine the effects of weather events on US population and economy. Impact on the populous, measured in injuries and fatalities, was caused by similar weather event patterns, with Tornados inflicting the harshest toll. Economic impact, measured in crop and property damage, followed a very different pattern of weather events, with Floods causing the largest total damage.
+
+Our raw data are taken from 
+[National Weather Service Instruction 10-1605][1]. The events in the database 
+start in the year 1950 and end 
+in November 2011.  Fatalities, injuries, and property damage (in dollars) are 
+totalled over that time.  
+
+[1]: https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf "National Weather Service Instruction 10-1605"
+
+## 2 Data Processing
+
+Storms and other severe weather events can cause both public health and economic problems. Severe events can result in fatalities, injuries, and property damage. The prevention of such outcomes is a key concern. This project explores the U.S. National Oceanic and Atmospheric Administration’s (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
+
+For this analysis - the database of the NOAA, available on the Coursera website, was downloaded and then read into R
+- a subset of the data was then manipulated to estimate e.g. the total economic value
+- packages such as dplyr were used to select and rank the manipulated data
+- ggplot2 was utilitized for all plots.
+
+
+---------------
+## 3 Loading Data & Subsetting
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(DT)
+
+## Read Data
+Storm.Data.Raw<- read.csv("repdata%2Fdata%2FStormData.csv")
+
+## Subsetting data using dplyr for Analysis - Raw Data remains untouched
+Storm.Data<- select(Storm.Data.Raw,EVTYPE,FATALITIES,INJURIES,PROPDMG,PROPDMGEXP,  CROPDMG,CROPDMGEXP)
+```
+
+
+## 4 Calculating Property Damage Values
+
+
+As indicated above, Page 12 of “NationalWeatherService_Project2.pdf” explains Damage Exponent Values, stored as a Factor in a combination of numeric and alphanumeric values. Once the levels of the exponent were identified, they were converted into numerical values. Total property damage in $ was simply calculated by multiplying DMG data with modfified EXP.
+
+```{r}
+Event.Type.Labels<- sort(unique(Storm.Data$EVTYPE))
+## Replacing Property Damage Exponent & calculating Property Damage.Value
+Property.Damage.Exponent.Old<- as.character(sort(unique(Storm.Data$PROPDMGEXP)))
+
+# Replacing Values
+# Replacing Values
+Storm.Data$PROPDMGEXP<- gsub(pattern = "?|-|+", replacement = "0" ,Storm.Data$PROPDMGEXP)
+Storm.Data$PROPDMGEXP<- gsub("1"    , "10",Storm.Data$PROPDMGEXP)
+Storm.Data$PROPDMGEXP<- gsub("H|h|2", "100" ,Storm.Data$PROPDMGEXP)
+Storm.Data$PROPDMGEXP<- gsub("K|k|3", "1000" ,Storm.Data$PROPDMGEXP)
+Storm.Data$PROPDMGEXP<- gsub("4"    , "10000" ,Storm.Data$PROPDMGEXP)
+Storm.Data$PROPDMGEXP<- gsub("5"    , "100000" ,Storm.Data$PROPDMGEXP)
+Storm.Data$PROPDMGEXP<- gsub("M|m|6", "1000000" ,Storm.Data$PROPDMGEXP)
+Storm.Data$PROPDMGEXP<- gsub("7"    , "10000000" ,Storm.Data$PROPDMGEXP)
+Storm.Data$PROPDMGEXP<- gsub("8"    , "100000000" ,Storm.Data$PROPDMGEXP)
+Storm.Data$PROPDMGEXP<- gsub("B|b"  , "1000000000" ,Storm.Data$PROPDMGEXP)
+
+Storm.Data$PROPDMGEXP.NUM<- as.numeric(as.character(Storm.Data$PROPDMGEXP))
+
+# Check to make sure everything was replaced
+Property.Damage.Exponent.New<- sort(unique(Storm.Data$PROPDMGEXP.NUM))
+# Calculating the Property.Damage.Value
+Storm.Data$PropValue<- Storm.Data$PROPDMG * Storm.Data$PROPDMGEXP.NUM
+```
+
+## 5 Calculating Crop Damage Values
+
+```{r}
+Crop.Damage.Exponent.Old<- as.character(sort(unique(Storm.Data$CROPDMGEXP)))
+
+Storm.Data$CROPDMGEXP<- gsub("?", "0" ,Storm.Data$CROPDMGEXP)
+Storm.Data$CROPDMGEXP<- gsub("H|h|2", "100" ,Storm.Data$CROPDMGEXP)
+Storm.Data$CROPDMGEXP<- gsub("K|k|3", "1000" ,Storm.Data$CROPDMGEXP)
+Storm.Data$CROPDMGEXP<- gsub("M|m"  , "1000000" ,Storm.Data$CROPDMGEXP)
+Storm.Data$CROPDMGEXP<- gsub("B|b"  , "1000000000" ,Storm.Data$CROPDMGEXP)
+
+Storm.Data$CropExpNumeric<- as.numeric(as.character(Storm.Data$CROPDMGEXP))
+
+# Check to make sure everything was replaced
+Crop.Damage.Exponent.New<- sort(unique(Storm.Data$CropExpNumeric))
+# Calculating the Property.Damage.Value
+Storm.Data$CropDamaValue<- Storm.Data$CROPDMG * Storm.Data$CropExpNumeric
+```
+
+## 6 Summarizing Fatality Data by Weather Event Type
+
+In order to answer question 1 of the assignment, dplyr was used to group, summarize, and rank the data in the df Sum.Fatalities. The data had to be ordered in descending order using the order comand, so that the data can be displayed in descending order in ggplot.
+
+
+```{r}
+## Summarizing Fatalities
+Sum.Fatalities<- select(Storm.Data,EVTYPE,FATALITIES)
+Sum.Fatalities<- Sum.Fatalities %>% 
+                        group_by(EVTYPE) %>% 
+                        summarise(FATALITIES = sum(FATALITIES)) %>%
+                        top_n(n=10) %>%
+                        arrange(desc(FATALITIES))
+## Sorting factor EVTYPE by Fatalities for ggplot
+Sum.Fatalities$EVTYPE <- factor(Sum.Fatalities$EVTYPE, levels = Sum.Fatalities$EVTYPE[order(-Sum.Fatalities$FATALITIES)])
+datatable(Sum.Fatalities, caption = 'Table 1: Top 10 Weather Events causing fatalities',options = list(pageLength = 5))
+```
+
+
+## 7 Summarizing Injury Data by Weather Event Type
+
+Dplyr was also used to group, summarize, and rank the data in the df Sum.Injuries. Again, The data had to be ordered in descending order using the order comand, so that the data can be displayed in descending order in ggplot.
+
+```{r}
+## Summarizing Injuries
+Sum.Injuries<- select(Storm.Data,EVTYPE,INJURIES)
+Sum.Injuries<- Sum.Injuries %>% 
+      group_by(EVTYPE) %>% 
+      summarise(INJURIES = sum(INJURIES)) %>%
+      top_n(n=10) %>%
+      arrange(desc(INJURIES))
+
+## Sorting factor EVTYPE by Injuries for ggplot
+Sum.Injuries$EVTYPE <- factor(Sum.Injuries$EVTYPE, levels = Sum.Injuries$EVTYPE[order(-Sum.Injuries$INJURIES)])
+datatable(Sum.Injuries, caption = 'Table 2: Top 10 Weather Events causing Injuries',options = list(pageLength = 5))
+```
+
+## 8 Modifying data for Plot 3
+
+
+```{r}
+Sum.Damage<- select(Storm.Data,EVTYPE,PropValue, CropDamaValue)
+Sum.Damage<- mutate(Sum.Damage, TotalDamage = PropValue + CropDamaValue)
+
+Sum.Damage<- Sum.Damage %>% 
+      group_by(EVTYPE) %>% 
+      summarise_each(funs(sum)) %>%
+      top_n(n=15) %>%
+      arrange(desc(TotalDamage))
+
+Sum.Damage$EVTYPE <- factor(Sum.Damage$EVTYPE,levels = Sum.Damage$EVTYPE[order(-Sum.Damage$TotalDamage)])
+## converting data into long data format for stacked bar plot in ggplot
+Q2<- select(Sum.Damage,-TotalDamage) %>%
+            gather(variable, value, -EVTYPE)
+
+datatable(Sum.Damage, caption = 'Table 3: Top 10 Weather Events causing largest economic impact',options = list(pageLength = 5))
+```
+
+## 9  Fatalities by Weather Event Type
+
+Plotting Fatalities by Weather Event in descending order clearly highlights the top 10 weather events causing the most signifcant human toll over the past 60+ years.
+
+```{r}
+## Plotting Falities
+p1<- ggplot(Sum.Fatalities, aes(x = EVTYPE, y = FATALITIES)) + geom_bar(stat = "identity") + 
+      labs(x="Weather Events", y = "Number of Fatalities",
+           title="Fatalities as Result of Top 10 Weather Events in the US",
+           caption = "Data Source: US NOAA Data from 1950 to Nov 2011") +
+      ylim(0, 6000)
+p1<- p1 + geom_text(aes(label=FATALITIES), position=position_dodge(width=0.9), vjust=-0.25,size = 3)
+
+p1<- p1 + theme_bw() + theme(panel.background = element_rect(fill = 'grey'))
+p1<- p1 + theme(legend.position="none")
+
+p1<- p1 + theme(plot.title = element_text(lineheight=.8, face="bold", hjust = 0.5)) + 
+      theme(plot.subtitle = element_text(lineheight=.8,hjust = 0.5)) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p1
+```
+
+## 10 Injuries by Weather Event Type
+
+```{r}
+## Plotting Injuries
+p2<- ggplot(Sum.Injuries, aes(x = EVTYPE, y = INJURIES)) + geom_bar(stat = "identity") + 
+      labs(x="Weather Events", y = "Number of Injuries",
+           title="Injuries as Result of Top 10 Weather Events in the US",
+           caption = "Data Source: US NOAA Data from 1950 to Nov 2011") +
+      ylim(0, 100000)
+p2<- p2 + geom_text(aes(label=INJURIES), position=position_dodge(width=0.9), vjust=-0.25,size = 3)
+
+p2<- p2 + theme_bw() + theme(panel.background = element_rect(fill = 'grey'))
+p2<- p2 + theme(legend.position="none")
+
+p2<- p2 + theme(plot.title = element_text(lineheight=.8, face="bold", hjust = 0.5)) + 
+      theme(plot.subtitle = element_text(lineheight=.8,hjust = 0.5)) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p2
+```
+
+## 11 Crop & Property Damage by Weather Event Type
+
+```{r}
+p3<- ggplot(Q2, aes(x = EVTYPE, y = value/1000000000, fill = variable)) + 
+      geom_bar(stat = "identity") + 
+      labs(x="Weather Events", y = "Damage in Billion $US",
+           title="Crop & Property Damage by Top 15 Weather Events in the US",
+           caption = "Data Source: US NOAA Data from 1950 to Nov 2011") +
+           ylim(0, 160)
+
+p3<- p3 + theme_bw() + theme(panel.background = element_rect(fill = 'grey'))
+p3<- p3 + theme(legend.position="none") + 
+      scale_fill_manual(values=c("red", "#000033"))
+
+p3<- p3 + theme(plot.title = element_text(lineheight=.8, face="bold", hjust = 0.5)) + 
+      theme(plot.subtitle = element_text(lineheight=.8,hjust = 0.5)) +
+      theme(axis.text.x = element_text(angle = 60, hjust = 1))
+p3<- p3 + annotate("text", x = 7, y = 50, size = 3, 
+                   label = "Property Damage in Blue", color= "#000033",hjust = 0 )
+p3<- p3 + annotate("text", x = 7, y = 40, size = 3, 
+                   label = "Crop Damage in Red", color= "red",hjust = 0 )
+p3
+```
+
